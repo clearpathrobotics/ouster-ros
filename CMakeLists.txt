@@ -8,7 +8,7 @@ project(ouster_ros)
 
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common)
+#find_package(PCL REQUIRED COMPONENTS common)
 find_package(tf2_eigen REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Boost REQUIRED)
@@ -20,6 +20,7 @@ find_package(
              sensor_msgs
              geometry_msgs
              pcl_conversions
+             pcl_ros
              roscpp
              tf2
              tf2_ros
