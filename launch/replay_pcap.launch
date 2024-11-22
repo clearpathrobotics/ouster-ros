@@ -1,29 +1,18 @@
 <launch>
 
+  <!-- NOTE: pcap replay node does not implement clock -->
+  <param name="use_sim_time" value="false"/>
+
+  <arg name="loop" default="false" doc="request loop playback"/>
+  <arg name="play_delay" default="0" doc="playback start delay in seconds"/>
+  <arg name="progress_update_freq" default="3.0"
+    doc="playback progress update frequency per second"/>
+
   <arg name="ouster_ns" default="ouster" doc="Override the default namespace of all ouster nodes"/>
-  <arg name="sensor_hostname" doc="hostname or IP in dotted decimal form of the sensor"/>
-  <arg name="udp_dest" default=" " doc="hostname or IP where the sensor will send data packets"/>
-  <arg name="lidar_port" default="0" doc="port to which the sensor should send lidar data"/>
-  <arg name="imu_port" default="0" doc="port to which the sensor should send imu data"/>
-  <arg name="udp_profile_lidar" default=" "
-    doc="lidar packet profile; possible values: {
-    LEGACY,
-    RNG19_RFL8_SIG16_NIR16,
-    RNG15_RFL8_NIR8
-    RNG19_RFL8_SIG16_NIR16_DUAL,
-    FUSA_RNG15_RFL8_NIR8_DUAL
-    }"/>
-  <arg name="lidar_mode" default=" "
-    doc="resolution and rate; possible values: {
-    512x10,
-    512x20,
-    1024x10,
-    1024x20,
-    2048x10,
-    4096x5
-    }"/>
-  <arg name="timestamp_mode" default=" "
-    doc="method used to timestamp measurements; possible values: {
+  <arg name="metadata" doc="path to read metadata file when replaying sensor data"/>
+  <arg name="pcap_file" doc="file name to use for the recorded pcap file"/>
+  <arg name="timestamp_mode" default="TIME_FROM_INTERNAL_OSC"
+    doc="A parameter that allows you to override the timestamp measurements; possible values: {
     TIME_FROM_INTERNAL_OSC,
     TIME_FROM_SYNC_PULSE_IN,
     TIME_FROM_PTP_1588,
@@ -31,8 +20,6 @@
     }"/>
   <arg name="ptp_utc_tai_offset" default="-37.0"
     doc="UTC/TAI offset in seconds to apply when using TIME_FROM_PTP_1588"/>
-
-  <arg name="metadata" default=" " doc="path to write metadata file when receiving sensor data"/>
   <arg name="viz" default="true" doc="whether to run a rviz"/>
   <arg name="rviz_config" default="$(find ouster_ros)/config/viz.rviz" doc="optional rviz config file"/>
 
@@ -51,11 +38,6 @@
     which frame to be used when publishing PointCloud2 or LaserScan messages.
     Choose between the value of sensor_frame or lidar_frame, leaving this value empty
     would set lidar_frame to be the frame used when publishing these messages."/>
-
-  <arg name="no_bond" default="false"
-    doc="request no bond setup when nodelets are created"/>
-  <arg if="$(arg no_bond)" name="_no_bond" value="--no-bond"/>
-  <arg unless="$(arg no_bond)" name="_no_bond" value=" "/>
 
   <arg name="dynamic_transforms_broadcast" default="false"
     doc="static or dynamic transforms broadcast"/>
@@ -80,23 +62,6 @@
     xyzir
     }"/>
 
-  <arg name="azimuth_window_start" default="0" doc="azimuth window start;
-    values range [0, 360000] millidegrees"/>
-  <arg name="azimuth_window_end" default="360000" doc="azimuth window end;
-    values range [0, 360000] millidegrees"/>
-
-  <arg name="persist_config" default="false"
-    doc="request the sensor to persist settings"/>
-
-  <arg name="attempt_reconnect" default="false"
-    doc="attempting to reconnect to the sensor after connection loss or
-    sensor powered down"/>
-  <arg name="dormant_period_between_reconnects" default="1.0"
-    doc="wait time in seconds between reconnection attempts"/>
-  <arg name="max_failed_reconnect_attempts" default="2147483647"
-    doc="maximum number of attempts trying to communicate with the sensor.
-         Counter resets upon successful connection"/>
-
   <arg name="organized" default="true"
     doc="generate an organzied point cloud"/>
   <arg name="destagger" default="true"
@@ -113,25 +78,14 @@
   </group>
 
   <group ns="$(arg ouster_ns)">
-    <node pkg="nodelet" type="nodelet" name="os_node"
-      output="screen" required="true"
-      args="load ouster_ros/OusterSensor os_nodelet_mgr $(arg _no_bond)">
-      <param name="~/sensor_hostname" type="str" value="$(arg sensor_hostname)"/>
-      <param name="~/udp_dest" type="str" value="$(arg udp_dest)"/>
-      <param name="~/lidar_port" type="int" value="$(arg lidar_port)"/>
-      <param name="~/imu_port" type="int" value="$(arg imu_port)"/>
-      <param name="~/udp_profile_lidar" type="str" value="$(arg udp_profile_lidar)"/>
-      <param name="~/lidar_mode" type="str" value="$(arg lidar_mode)"/>
-      <param name="~/timestamp_mode" type="str" value="$(arg timestamp_mode)"/>
-      <param name="~/metadata" type="str" value="$(arg metadata)"/>
-      <param name="~/azimuth_window_start" value="$(arg azimuth_window_start)"/>
-      <param name="~/azimuth_window_end" value="$(arg azimuth_window_end)"/>
-      <param name="~/persist_config" value="$(arg persist_config)"/>
-      <param name="~/attempt_reconnect" value="$(arg attempt_reconnect)"/>
-      <param name="~/dormant_period_between_reconnects"
-             value="$(arg dormant_period_between_reconnects)"/>
-      <param name="~/max_failed_reconnect_attempts"
-             value="$(arg max_failed_reconnect_attempts)"/>
+    <node pkg="nodelet" type="nodelet"
+      name="os_node" output="screen" required="true"
+      launch-prefix="bash -c 'sleep $(arg play_delay); $0 $@' "
+      args="load ouster_ros/OusterPcap os_nodelet_mgr">
+      <param name="~/metadata" value="$(arg metadata)"/>
+      <param name="~/pcap_file" value="$(arg pcap_file)"/>
+      <param name="~/loop" value="$(arg loop)"/>
+      <param name="~/progress_update_freq" value="$(arg progress_update_freq)"/>
     </node>
   </group>
 
@@ -147,7 +101,6 @@
     <arg name="pub_static_tf" value="$(arg pub_static_tf)"/>
     <arg name="timestamp_mode" value="$(arg timestamp_mode)"/>
     <arg name="ptp_utc_tai_offset" value="$(arg ptp_utc_tai_offset)"/>
-    <arg name="_no_bond" value="$(arg _no_bond)"/>
     <arg name="dynamic_transforms_broadcast"
       value="$(arg dynamic_transforms_broadcast)"/>
     <arg name="dynamic_transforms_broadcast_rate"
@@ -160,5 +113,6 @@
     <arg name="min_range" value="$(arg min_range)"/>
     <arg name="max_range" value="$(arg max_range)"/>
   </include>
+
 
 </launch>
